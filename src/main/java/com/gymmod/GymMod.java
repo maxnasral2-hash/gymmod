@@ -4,18 +4,20 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import net.fabricmc.api.EnvType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
@@ -27,7 +29,7 @@ public class GymMod implements ModInitializer {
             .persistent(GymStats.CODEC)
             .copyOnDeath());
 
-    public static Identifier id(String path) { return Identifier.fromNamespaceAndPath(MOD_ID, path); }
+    public static ResourceLocation id(String path) { return ResourceLocation.fromNamespaceAndPath(MOD_ID, path); }
 
     // кто сейчас доедает еду (чтобы поймать момент «съел»)
     private final Map<UUID, ItemStack> eating = new HashMap<>();
@@ -52,17 +54,19 @@ public class GymMod implements ModInitializer {
             }
         });
 
-        // Индикатор питательной ценности на еде + описание снарядов
-        ItemTooltipCallback.EVENT.register((stack, ctx, flag, lines) -> {
-            Nutrition.Macros m = Nutrition.of(stack);
-            if (m != null) {
-                lines.add(Component.translatable("gymmod.tooltip.macros", m.protein(), m.carbs(), m.fat()));
-                lines.add(Component.translatable("gymmod.tooltip.value", Nutrition.bar(m), m.value()));
-            }
-            if (stack.getItem() instanceof ExerciseItem e) {
-                lines.add(Component.translatable("gymmod.tooltip.trains", Component.translatable(e.stat.key), e.baseXp));
-            }
-        });
+        // Индикатор питательной ценности на еде + описание снарядов (только на клиенте)
+        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            ItemTooltipCallback.EVENT.register((stack, ctx, flag, lines) -> {
+                Nutrition.Macros m = Nutrition.of(stack);
+                if (m != null) {
+                    lines.add(Component.translatable("gymmod.tooltip.macros", m.protein(), m.carbs(), m.fat()));
+                    lines.add(Component.translatable("gymmod.tooltip.value", Nutrition.bar(m), m.value()));
+                }
+                if (stack.getItem() instanceof ExerciseItem e) {
+                    lines.add(Component.translatable("gymmod.tooltip.trains", Component.translatable(e.stat.key), e.baseXp));
+                }
+            });
+        }
 
         CommandRegistrationCallback.EVENT.register((dispatcher, access, env) ->
                 dispatcher.register(Commands.literal("gym").executes(ctx -> {
